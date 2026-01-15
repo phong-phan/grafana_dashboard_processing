@@ -2,7 +2,9 @@
 
 ![Grafana Customizer](README_master_image.jpg)
 
-A Python script designed to automate the customization of Grafana dashboards when using with CheckMK for different customer deployments. It handles the replacement of hostnames, updating of datasource UIDs from multiple datasources, and modification of site names across single or multiple dashboard files.
+A Python script designed to automate the customization of Grafana dashboards when using with CheckMK for different customer deployments.
+If you want to reuse your dashboards for different customer deployments, this script is for you.
+It handles the replacement of hostnames, updating of datasource UIDs from multiple datasources, and modification of site names across single or multiple dashboard files.
 
 ## Features
 

@@ -1,0 +1,49 @@
+{
+  "instructions": "Map 'current' values to 'replace_with'. To remove a host, leave 'replace_with' as null or empty string.",
+  "datasources": [
+    {
+      "type": "checkmk-cloud-datasource",
+      "uid": {
+        "current": "df1hbvwkcy328c",
+        "replace_with": "df1hbvwkcy328c"
+      }
+    },
+    {
+      "type": "tribe-29-checkmk-datasource",
+      "uid": {
+        "current": "df1hbvwkcy328c",
+        "replace_with": "df1hbvwkcy328c"
+      }
+    }
+  ],
+  "site_name": {
+    "current": "tst",
+    "replace_with": "tst"
+  },
+  "hosts": [
+    {
+      "current": "NA-TST-ANS1",
+      "replace_with": "NA-TST-ANS1"
+    },
+    {
+      "current": "NA-TST-CP01",
+      "replace_with": "NA-TST-CP01"
+    },
+    {
+      "current": "NA-TST-MIS1",
+      "replace_with": "NA-TST-MIS1"
+    },
+    {
+      "current": "NA-TST-MIW1",
+      "replace_with": "NA-TST-MIW1"
+    },
+    {
+      "current": "NA-TST-NFS1",
+      "replace_with": "NA-TST-NFS1"
+    },
+    {
+      "current": "NA-TST-OSS1",
+      "replace_with": "NA-TST-OSS1"
+    }
+  ]
+}

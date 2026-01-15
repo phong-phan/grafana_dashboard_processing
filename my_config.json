@@ -1,0 +1,37 @@
+{
+  "instructions": "Map 'current' values to 'replace_with'. To remove a host, leave 'replace_with' as null or empty string.",
+  "datasource_uid": {
+    "current": "df1hbvwkcy328c",
+    "replace_with": "newuidgotohere123"
+  },
+  "site_name": {
+    "current": "tst",
+    "replace_with": "pphan"
+  },
+  "hosts": [
+    {
+      "current": "NA-TST-ANS1",
+      "replace_with": "PPHAN-TEST-1"
+    },
+    {
+      "current": "NA-TST-CP01",
+      "replace_with": "PPHAN-TEST-2"
+    },
+    {
+      "current": "NA-TST-MIS1",
+      "replace_with": "PPHAN-PROD-1"
+    },
+    {
+      "current": "NA-TST-MIW1",
+      "replace_with": "PPHAN-PROD-2"
+    },
+    {
+      "current": "NA-TST-NFS1",
+      "replace_with": null
+    },
+    {
+      "current": "NA-TST-OSS1",
+      "replace_with": null
+    }
+  ]
+}

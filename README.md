@@ -35,9 +35,29 @@ python3 grafana_customizer.py generate-config source_dashboard.json config.json
 python3 grafana_customizer.py generate-config ./dashboards_dir config.json
 ```
 
-### 2. Edit Configuration
+### 2. Map Hosts (Optional)
 
-Open the generated `config.json` and define your mappings.
+If you have a large number of new hosts, you can map them automatically via a text file (one host per line) to update your configuration file. Hosts are mapped **positionally**: the 1st line fills the `replace_with` of the 1st host entry, the 2nd line the 2nd entry, and so on.
+
+- If the hosts file has **fewer** lines than existing host entries, the leftover host entries are set to `replace_with: null`, which marks them for **removal** when you run `apply`.
+- If the hosts file has **more** lines than existing host entries, the extra hosts are appended as new entries. During `apply`, these extra hosts cause the existing query targets in each panel to be duplicated (one copy per extra host) so the panel queries data for all hosts.
+
+You can also optionally specify the Target Site and Datasource UID at the top of the text file using `SITE=` and `UID=` prefixes:
+
+```text
+SITE=NEW_CHECKMK_SITE
+UID=NEW_DATASOURCE_UID
+new-host-01
+new-host-02
+```
+
+```bash
+python3 grafana_customizer.py map-hosts NEW_HOSTS.txt config.json --out mapped_config.json
+```
+
+### 3. Edit Configuration
+
+Open the generated/mapped `config.json` and refine your mappings if necessary.
 
 ```json
 {
@@ -66,8 +86,9 @@ Open the generated `config.json` and define your mappings.
 
 - **Rename**: Set `replace_with` to the new hostname.
 - **Remove**: Set `replace_with` to `null` or `""` to remove the host and its associated panels.
+- **Site**: `site_name.replace_with` is applied to **every** `site` field found in the dashboard(s), regardless of its current value — there is no per-site matching against `site_name.current`.
 
-### 3. Apply Changes
+### 4. Apply Changes
 
 Apply the configuration to generate the customized dashboards.
 

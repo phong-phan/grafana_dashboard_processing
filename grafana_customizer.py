@@ -1,4 +1,5 @@
 import argparse
+import copy
 import glob
 import json
 import os
@@ -7,16 +8,37 @@ import sys
 
 def scan_dashboard(dashboard_data):
     """
-    Scans the dashboard for hostnames, datasource UIDs, and site names.
+    Scans the dashboard for hostnames, datasource UIDs, site names, and
+    panel transformations that rename fields by regex (these commonly
+    encode a customer-specific host-naming prefix, e.g. to clean up
+    legend names).
     Returns a dictionary with the findings.
     """
     hosts = set()
     # Store datasources as a dictionary of type -> set(uids)
     datasources = {}
     sites = set()
+    transformations = set()  # set of (regex, renamePattern) tuples
+    value_mappings = set()  # set of (value, text) tuples
+    urls = set()  # yesoreyeram-infinity-datasource CSV/HTTP pull URLs
+    panel_titles = set()  # hand-typed panel titles
+    text_content = set()  # hand-typed HTML/markdown body of "text" panels
 
     def walk_json(node):
         if isinstance(node, dict):
+            # Check for hand-typed panel titles (any panel-like object: has
+            # both "type" and "title", which excludes the dashboard's own
+            # top-level title).
+            if "type" in node and isinstance(node.get("title"), str) and node["title"].strip():
+                panel_titles.add(node["title"])
+
+            # Check for "text" panel body content (often hardcodes a
+            # customer/site name in a dashboard header).
+            if node.get("type") == "text" and isinstance(node.get("options"), dict):
+                content = node["options"].get("content")
+                if isinstance(content, str) and content.strip():
+                    text_content.add(content)
+
             # Check for Datasource UID
             if "datasource" in node and isinstance(node["datasource"], dict):
                 ds_type = node["datasource"].get("type")
@@ -27,6 +49,11 @@ def scan_dashboard(dashboard_data):
                         datasources[ds_type] = set()
                     datasources[ds_type].add(ds_uid)
 
+                # Check for the URL a target pulls its data from (e.g. a
+                # customer-specific CSV export endpoint).
+                if ds_type == "yesoreyeram-infinity-datasource" and isinstance(node.get("url"), str):
+                    urls.add(node["url"])
+
             # Check for requestSpec (where host_name and site usually live)
             if "requestSpec" in node and isinstance(node["requestSpec"], dict):
                 spec = node["requestSpec"]
@@ -34,6 +61,24 @@ def scan_dashboard(dashboard_data):
                     hosts.add(spec["host_name"])
                 if "site" in spec:
                     sites.add(spec["site"])
+
+            # Check for "Rename fields by regex" panel transformations
+            if "transformations" in node and isinstance(node["transformations"], list):
+                for t in node["transformations"]:
+                    if isinstance(t, dict) and t.get("id") == "renameByRegex":
+                        opts = t.get("options", {})
+                        regex = opts.get("regex")
+                        if regex is not None:
+                            transformations.add((regex, opts.get("renamePattern")))
+
+            # Check for panel value mappings (Value -> Display text), often
+            # used to label raw values like IPs with a customer-specific name.
+            if "mappings" in node and isinstance(node["mappings"], list):
+                for m in node["mappings"]:
+                    if isinstance(m, dict) and m.get("type") == "value":
+                        for value, opts in (m.get("options") or {}).items():
+                            if isinstance(opts, dict) and "text" in opts:
+                                value_mappings.add((value, opts["text"]))
 
             for key, value in node.items():
                 walk_json(value)
@@ -49,10 +94,25 @@ def scan_dashboard(dashboard_data):
         for uid in sorted(list(uids)):
             formatted_datasources.append({"type": ds_type, "uid": uid})
 
+    formatted_transformations = [
+        {"regex": regex, "renamePattern": rename_pattern}
+        for regex, rename_pattern in sorted(transformations, key=lambda t: (t[0] or "", t[1] or ""))
+    ]
+
+    formatted_value_mappings = [
+        {"value": value, "text": text}
+        for value, text in sorted(value_mappings, key=lambda t: (t[0] or "", t[1] or ""))
+    ]
+
     return {
         "hosts": sorted(list(hosts)),
         "datasources": formatted_datasources,
         "sites": sorted(list(sites)),
+        "transformations": formatted_transformations,
+        "value_mappings": formatted_value_mappings,
+        "urls": sorted(list(urls)),
+        "panel_titles": sorted(list(panel_titles)),
+        "text_content": sorted(list(text_content)),
     }
 
 
@@ -76,6 +136,11 @@ def generate_config(input_path, config_path):
     all_hosts = set()
     all_sites = set()
     all_datasources = {}  # type -> set(uids)
+    all_transformations = set()  # set of (regex, renamePattern) tuples
+    all_value_mappings = set()  # set of (value, text) tuples
+    all_urls = set()
+    all_panel_titles = set()
+    all_text_content = set()
 
     for file_path in files_to_scan:
         try:
@@ -91,6 +156,16 @@ def generate_config(input_path, config_path):
                         all_datasources[ds["type"]] = set()
                     all_datasources[ds["type"]].add(ds["uid"])
 
+                for t in result["transformations"]:
+                    all_transformations.add((t["regex"], t["renamePattern"]))
+
+                for vm in result["value_mappings"]:
+                    all_value_mappings.add((vm["value"], vm["text"]))
+
+                all_urls.update(result["urls"])
+                all_panel_titles.update(result["panel_titles"])
+                all_text_content.update(result["text_content"])
+
         except (json.JSONDecodeError, IOError) as e:
             print(f"Warning: Failed to process '{file_path}': {e}")
 
@@ -102,6 +177,11 @@ def generate_config(input_path, config_path):
             "replace_with": sorted(list(all_sites))[0] if all_sites else "",
         },
         "hosts": [],
+        "transformations": [],
+        "value_mappings": [],
+        "urls": [],
+        "panel_titles": [],
+        "text_content": [],
     }
 
     # Populate datasources
@@ -114,6 +194,28 @@ def generate_config(input_path, config_path):
     # Populate hosts
     for host in sorted(list(all_hosts)):
         config["hosts"].append({"current": host, "replace_with": host})
+
+    # Populate transformations ("Rename fields by regex" Match/Replace pairs)
+    for regex, rename_pattern in sorted(all_transformations, key=lambda t: (t[0] or "", t[1] or "")):
+        current = {"regex": regex, "renamePattern": rename_pattern}
+        config["transformations"].append({"current": current, "replace_with": dict(current)})
+
+    # Populate value mappings (Value -> Display text)
+    for value, text in sorted(all_value_mappings, key=lambda t: (t[0] or "", t[1] or "")):
+        current = {"value": value, "text": text}
+        config["value_mappings"].append({"current": current, "replace_with": dict(current)})
+
+    # Populate data pull URLs (yesoreyeram-infinity-datasource CSV/HTTP targets)
+    for url in sorted(all_urls):
+        config["urls"].append({"current": url, "replace_with": url})
+
+    # Populate hand-typed panel titles
+    for title in sorted(all_panel_titles):
+        config["panel_titles"].append({"current": title, "replace_with": title})
+
+    # Populate hand-typed "text" panel body content (HTML/markdown)
+    for content in sorted(all_text_content):
+        config["text_content"].append({"current": content, "replace_with": content})
 
     try:
         with open(config_path, "w") as f:
@@ -142,11 +244,11 @@ def apply_changes(input_path, config_path, output_path):
     apply_config_to_dashboards(input_path, config_data, output_path)
 
 
-def apply_config_to_dashboards(input_path, config_data, output_path):
+def build_transform_maps(config_data):
     """
-    Applies the configuration changes to the dashboard(s).
+    Derives the lookup structures used by transform_dashboard() from a
+    config.json-shaped dict.
     """
-    # Prepare mappings
     host_map = {}
     for item in config_data.get("hosts", []):
         current = item.get("current")
@@ -179,25 +281,83 @@ def apply_config_to_dashboards(input_path, config_data, output_path):
             ds_map[ds_type] = {}
         ds_map[ds_type][current_uid] = new_uid
 
-    # Determine files to process
-    files_to_process = []
-    is_dir_mode = False
+    # (regex, renamePattern) -> {regex, renamePattern} for "renameByRegex"
+    # panel transformations (often encode a customer-specific host prefix).
+    transformation_map = {}
+    for item in config_data.get("transformations", []):
+        current = item.get("current") or {}
+        replace = item.get("replace_with") or {}
+        key = (current.get("regex"), current.get("renamePattern"))
+        transformation_map[key] = {
+            "regex": replace.get("regex", current.get("regex")),
+            "renamePattern": replace.get("renamePattern", current.get("renamePattern")),
+        }
 
-    if os.path.isdir(input_path):
-        is_dir_mode = True
-        files_to_process = glob.glob(os.path.join(input_path, "*.json"))
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
-        elif not os.path.isdir(output_path):
-            print(
-                f"Error: Input is a directory, but output '{output_path}' is not a directory."
-            )
-            sys.exit(1)
-    elif os.path.isfile(input_path):
-        files_to_process = [input_path]
-    else:
-        print(f"Error: Input path '{input_path}' not found.")
-        sys.exit(1)
+    # (value, text) -> {value, text} for "value" panel value mappings
+    # (often label a raw value, e.g. an IP, with a customer-specific name).
+    value_mapping_map = {}
+    for item in config_data.get("value_mappings", []):
+        current = item.get("current") or {}
+        replace = item.get("replace_with") or {}
+        key = (current.get("value"), current.get("text"))
+        value_mapping_map[key] = {
+            "value": replace.get("value", current.get("value")),
+            "text": replace.get("text", current.get("text")),
+        }
+
+    # current URL -> replace_with URL, for yesoreyeram-infinity-datasource
+    # CSV/HTTP pull targets (often a customer-specific export endpoint).
+    url_map = {}
+    for item in config_data.get("urls", []):
+        current = item.get("current")
+        if current:
+            url_map[current] = item.get("replace_with")
+
+    # current -> replace_with, for hand-typed panel titles.
+    panel_title_map = {}
+    for item in config_data.get("panel_titles", []):
+        current = item.get("current")
+        if current:
+            panel_title_map[current] = item.get("replace_with")
+
+    # current -> replace_with, for hand-typed "text" panel body content.
+    text_content_map = {}
+    for item in config_data.get("text_content", []):
+        current = item.get("current")
+        if current:
+            text_content_map[current] = item.get("replace_with")
+
+    return {
+        "host_map": host_map,
+        "hosts_to_remove": hosts_to_remove,
+        "hosts_to_nullify": hosts_to_nullify,
+        "extra_hosts": extra_hosts,
+        "target_site": target_site,
+        "ds_map": ds_map,
+        "transformation_map": transformation_map,
+        "value_mapping_map": value_mapping_map,
+        "url_map": url_map,
+        "panel_title_map": panel_title_map,
+        "text_content_map": text_content_map,
+    }
+
+
+def transform_dashboard(dashboard_data, maps):
+    """
+    Applies the transformations described by `maps` (see build_transform_maps)
+    to a single in-memory dashboard dict, mutating it in place and returning it.
+    """
+    host_map = maps["host_map"]
+    hosts_to_remove = maps["hosts_to_remove"]
+    hosts_to_nullify = maps["hosts_to_nullify"]
+    extra_hosts = maps["extra_hosts"]
+    target_site = maps["target_site"]
+    ds_map = maps["ds_map"]
+    transformation_map = maps["transformation_map"]
+    value_mapping_map = maps["value_mapping_map"]
+    url_map = maps["url_map"]
+    panel_title_map = maps["panel_title_map"]
+    text_content_map = maps["text_content_map"]
 
     def transform_node(node):
         """
@@ -213,6 +373,50 @@ def apply_config_to_dashboards(input_path, config_data, output_path):
                 if ds_type and ds_uid and ds_type in ds_map:
                     if ds_uid in ds_map[ds_type]:
                         node["datasource"]["uid"] = ds_map[ds_type][ds_uid]
+
+                # Update the data-pull URL for infinity-datasource targets
+                if ds_type == "yesoreyeram-infinity-datasource" and node.get("url") in url_map:
+                    node["url"] = url_map[node["url"]]
+
+            # Update hand-typed panel title
+            if "type" in node and node.get("title") in panel_title_map:
+                node["title"] = panel_title_map[node["title"]]
+
+            # Update hand-typed "text" panel body content
+            if node.get("type") == "text" and isinstance(node.get("options"), dict):
+                content = node["options"].get("content")
+                if content in text_content_map:
+                    node["options"]["content"] = text_content_map[content]
+
+            # Update "Rename fields by regex" transformations
+            if "transformations" in node and isinstance(node["transformations"], list):
+                for t in node["transformations"]:
+                    if isinstance(t, dict) and t.get("id") == "renameByRegex":
+                        opts = t.get("options", {})
+                        key = (opts.get("regex"), opts.get("renamePattern"))
+                        if key in transformation_map:
+                            replacement = transformation_map[key]
+                            opts["regex"] = replacement["regex"]
+                            opts["renamePattern"] = replacement["renamePattern"]
+
+            # Update panel value mappings (Value -> Display text)
+            if "mappings" in node and isinstance(node["mappings"], list):
+                for m in node["mappings"]:
+                    if isinstance(m, dict) and m.get("type") == "value":
+                        opts = m.get("options")
+                        if isinstance(opts, dict):
+                            new_opts = {}
+                            for value, val_opts in opts.items():
+                                key = (value, val_opts.get("text")) if isinstance(val_opts, dict) else (value, None)
+                                if key in value_mapping_map:
+                                    replacement = value_mapping_map[key]
+                                    new_value = replacement["value"]
+                                    new_val_opts = dict(val_opts)
+                                    new_val_opts["text"] = replacement["text"]
+                                    new_opts[new_value] = new_val_opts
+                                else:
+                                    new_opts[value] = val_opts
+                            m["options"] = new_opts
 
             # 2. Update Site and Hostname in requestSpec
             if "requestSpec" in node and isinstance(node["requestSpec"], dict):
@@ -288,7 +492,6 @@ def apply_config_to_dashboards(input_path, config_data, output_path):
                                     return c
                             return "ZZZ"
 
-                        import copy
                         for extra_host in extra_hosts:
                             for proto_t in prototype_targets:
                                 new_t = copy.deepcopy(proto_t)
@@ -327,13 +530,44 @@ def apply_config_to_dashboards(input_path, config_data, output_path):
 
         return True
 
+    transform_node(dashboard_data)
+    return dashboard_data
+
+
+def apply_config_to_dashboards(input_path, config_data, output_path):
+    """
+    Applies the configuration changes to the dashboard(s) on disk.
+    Accepts single file -> single file OR directory -> directory.
+    """
+    maps = build_transform_maps(config_data)
+
+    # Determine files to process
+    files_to_process = []
+    is_dir_mode = False
+
+    if os.path.isdir(input_path):
+        is_dir_mode = True
+        files_to_process = glob.glob(os.path.join(input_path, "*.json"))
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+        elif not os.path.isdir(output_path):
+            print(
+                f"Error: Input is a directory, but output '{output_path}' is not a directory."
+            )
+            sys.exit(1)
+    elif os.path.isfile(input_path):
+        files_to_process = [input_path]
+    else:
+        print(f"Error: Input path '{input_path}' not found.")
+        sys.exit(1)
+
     count = 0
     for file_path in files_to_process:
         try:
             with open(file_path, "r") as f:
                 dashboard_data = json.load(f)
 
-            transform_node(dashboard_data)
+            transform_dashboard(dashboard_data, maps)
 
             if is_dir_mode:
                 filename = os.path.basename(file_path)

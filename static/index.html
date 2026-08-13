@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grafana Dashboard Customizer</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header>
+  <h1>Grafana Dashboard Customizer</h1>
+  <p class="subtitle">Upload dashboard JSON, review what was detected on the left, type replacements on the right.</p>
+</header>
+
+<main>
+
+  <section id="upload-section" class="card">
+    <h2>1. Load dashboard(s)</h2>
+    <label class="dropzone" id="dropzone" for="file-input">
+      <span id="dropzone-label">Click to choose file(s), or drag &amp; drop JSON dashboards here</span>
+      <input type="file" id="file-input" accept=".json" multiple hidden>
+    </label>
+    <div id="file-list" class="file-list"></div>
+    <div id="scan-warnings" class="warnings hidden"></div>
+    <div class="row-actions">
+      <label class="secondary-action">
+        Import existing config.json
+        <input type="file" id="config-input" accept=".json" hidden>
+      </label>
+    </div>
+  </section>
+
+  <section id="editor-section" class="card hidden">
+    <h2>2. Review &amp; edit mappings</h2>
+
+    <div class="subsection">
+      <h3>Site name</h3>
+      <div class="table-header two-col">
+        <div>Current</div>
+        <div>Replace with</div>
+      </div>
+      <div id="site-row" class="table-body"></div>
+    </div>
+
+    <div class="subsection">
+      <h3>Datasource UIDs</h3>
+      <div class="table-header two-col">
+        <div>Current</div>
+        <div>Replace with</div>
+      </div>
+      <div id="datasource-rows" class="table-body"></div>
+      <p class="empty-note" id="datasource-empty">No datasource UIDs detected.</p>
+    </div>
+
+    <div class="subsection">
+      <h3>Hosts</h3>
+      <div class="table-header three-col">
+        <div>Current</div>
+        <div>Action</div>
+        <div>Replace with</div>
+      </div>
+      <div id="host-rows" class="table-body"></div>
+      <p class="empty-note" id="host-empty">No hosts detected.</p>
+      <button type="button" id="add-host-btn" class="secondary-btn">+ Add new host mapping</button>
+    </div>
+
+    <div class="subsection">
+      <h3>Panel transformations (rename fields by regex)</h3>
+      <div class="table-header two-col">
+        <div>Current</div>
+        <div>Replace with</div>
+      </div>
+      <div id="transformation-rows" class="table-body"></div>
+      <p class="empty-note" id="transformation-empty">No "Rename fields by regex" transformations detected.</p>
+    </div>
+
+    <div class="subsection">
+      <h3>Value mappings</h3>
+      <div class="table-header two-col">
+        <div>Current</div>
+        <div>Replace with</div>
+      </div>
+      <div id="value-mapping-rows" class="table-body"></div>
+      <p class="empty-note" id="value-mapping-empty">No value mappings detected.</p>
+    </div>
+
+    <div class="subsection">
+      <h3>Data pull URLs (CSV/HTTP)</h3>
+      <div class="table-header two-col">
+        <div>Current</div>
+        <div>Replace with</div>
+      </div>
+      <div id="url-rows" class="table-body"></div>
+      <p class="empty-note" id="url-empty">No data pull URLs detected.</p>
+    </div>
+
+    <div class="subsection">
+      <h3>Panel titles</h3>
+      <div class="table-header two-col">
+        <div>Current</div>
+        <div>Replace with</div>
+      </div>
+      <div id="panel-title-rows" class="table-body"></div>
+      <p class="empty-note" id="panel-title-empty">No panel titles detected.</p>
+    </div>
+
+    <div class="subsection">
+      <h3>Text panel content (HTML/markdown)</h3>
+      <div class="table-header two-col">
+        <div>Current</div>
+        <div>Replace with</div>
+      </div>
+      <div id="text-content-rows" class="table-body"></div>
+      <p class="empty-note" id="text-content-empty">No text panel content detected.</p>
+    </div>
+  </section>
+
+  <section id="apply-section" class="card hidden">
+    <h2>3. Apply</h2>
+    <div class="row-actions">
+      <button type="button" id="download-config-btn" class="secondary-btn">Download config.json</button>
+      <button type="button" id="apply-btn" class="primary-btn">Apply &amp; download dashboard(s)</button>
+    </div>
+    <p id="apply-status" class="status hidden"></p>
+  </section>
+
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>

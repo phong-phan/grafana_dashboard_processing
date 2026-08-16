@@ -5,6 +5,7 @@
     files: [],           // [{name, content}]
     config: null,        // {site: {current, replace_with}, datasources: [...], hosts: [...]}
     pendingImport: null,  // config-shaped object loaded via "Import config.json", applied on next scan
+    presets: [],          // [{name, site_name, datasources: [{type, uid}]}]
   };
 
   const el = (id) => document.getElementById(id);
@@ -38,6 +39,13 @@
   const downloadConfigBtn = el("download-config-btn");
   const applyBtn = el("apply-btn");
   const applyStatus = el("apply-status");
+
+  const presetList = el("preset-list");
+  const addPresetBtn = el("add-preset-btn");
+  const savePresetsBtn = el("save-presets-btn");
+  const presetsStatus = el("presets-status");
+  const presetSelect = el("preset-select");
+  const applyPresetBtn = el("apply-preset-btn");
 
   // ---------- File loading ----------
 
@@ -755,4 +763,198 @@
       applyBtn.disabled = false;
     }
   });
+
+  // ---------- Presets ----------
+
+  async function loadPresets() {
+    try {
+      const res = await fetch("/api/presets");
+      state.presets = await res.json();
+    } catch (err) {
+      state.presets = [];
+    }
+    renderPresets();
+  }
+
+  function renderPresets() {
+    presetList.innerHTML = "";
+    state.presets.forEach((preset, idx) => {
+      presetList.appendChild(buildPresetCard(preset, idx));
+    });
+    renderPresetSelect();
+  }
+
+  function buildPresetCard(preset, presetIdx) {
+    const card = document.createElement("div");
+    card.className = "preset-card";
+
+    const header = document.createElement("div");
+    header.className = "preset-card-header";
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "preset-name-input";
+    nameInput.placeholder = "Preset name (e.g. VN)";
+    nameInput.value = preset.name || "";
+    nameInput.addEventListener("input", () => {
+      state.presets[presetIdx].name = nameInput.value;
+      renderPresetSelect();
+    });
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "remove-row-btn";
+    deleteBtn.textContent = "Delete preset";
+    deleteBtn.addEventListener("click", () => {
+      state.presets.splice(presetIdx, 1);
+      renderPresets();
+    });
+
+    header.appendChild(nameInput);
+    header.appendChild(deleteBtn);
+    card.appendChild(header);
+
+    const siteRow = document.createElement("div");
+    siteRow.className = "preset-field-row";
+    const siteLabel = document.createElement("label");
+    siteLabel.textContent = "Site name";
+    const siteInput = document.createElement("input");
+    siteInput.type = "text";
+    siteInput.value = preset.site_name || "";
+    siteInput.addEventListener("input", () => {
+      state.presets[presetIdx].site_name = siteInput.value;
+    });
+    siteRow.appendChild(siteLabel);
+    siteRow.appendChild(siteInput);
+    card.appendChild(siteRow);
+
+    const dsWrap = document.createElement("div");
+    dsWrap.className = "preset-datasources";
+    (preset.datasources || []).forEach((ds, dsIdx) => {
+      dsWrap.appendChild(buildPresetDatasourceRow(presetIdx, ds, dsIdx));
+    });
+    card.appendChild(dsWrap);
+
+    const addDsBtn = document.createElement("button");
+    addDsBtn.type = "button";
+    addDsBtn.className = "secondary-btn";
+    addDsBtn.textContent = "+ Add datasource";
+    addDsBtn.addEventListener("click", () => {
+      if (!state.presets[presetIdx].datasources) state.presets[presetIdx].datasources = [];
+      state.presets[presetIdx].datasources.push({ type: "", uid: "" });
+      renderPresets();
+    });
+    card.appendChild(addDsBtn);
+
+    return card;
+  }
+
+  function buildPresetDatasourceRow(presetIdx, ds, dsIdx) {
+    const row = document.createElement("div");
+    row.className = "preset-field-row";
+
+    const typeInput = document.createElement("input");
+    typeInput.type = "text";
+    typeInput.placeholder = "Datasource type (e.g. checkmk-cloud-datasource)";
+    typeInput.value = ds.type || "";
+    typeInput.addEventListener("input", () => {
+      state.presets[presetIdx].datasources[dsIdx].type = typeInput.value;
+    });
+
+    const uidInput = document.createElement("input");
+    uidInput.type = "text";
+    uidInput.placeholder = "UID";
+    uidInput.value = ds.uid || "";
+    uidInput.addEventListener("input", () => {
+      state.presets[presetIdx].datasources[dsIdx].uid = uidInput.value;
+    });
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "remove-row-btn";
+    removeBtn.textContent = "Remove";
+    removeBtn.addEventListener("click", () => {
+      state.presets[presetIdx].datasources.splice(dsIdx, 1);
+      renderPresets();
+    });
+
+    row.appendChild(typeInput);
+    row.appendChild(uidInput);
+    row.appendChild(removeBtn);
+    return row;
+  }
+
+  function renderPresetSelect() {
+    const prevValue = presetSelect.value;
+    presetSelect.innerHTML = '<option value="">-- Select a preset --</option>';
+    state.presets.forEach((preset, idx) => {
+      const opt = document.createElement("option");
+      opt.value = String(idx);
+      opt.textContent = preset.name || `(unnamed preset ${idx + 1})`;
+      presetSelect.appendChild(opt);
+    });
+    if (Array.from(presetSelect.options).some((o) => o.value === prevValue)) {
+      presetSelect.value = prevValue;
+    }
+  }
+
+  addPresetBtn.addEventListener("click", () => {
+    state.presets.push({
+      name: "",
+      site_name: "",
+      datasources: [
+        { type: "checkmk-cloud-datasource", uid: "" },
+        { type: "yesoreyeram-infinity-datasource", uid: "" },
+        { type: "loki", uid: "" },
+        { type: "mssql", uid: "" },
+      ],
+    });
+    renderPresets();
+  });
+
+  savePresetsBtn.addEventListener("click", async () => {
+    presetsStatus.classList.remove("hidden", "ok", "error");
+    presetsStatus.textContent = "Saving...";
+    try {
+      const res = await fetch("/api/presets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(state.presets),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to save presets.");
+      }
+      presetsStatus.classList.add("ok");
+      presetsStatus.textContent = "Presets saved.";
+    } catch (err) {
+      presetsStatus.classList.add("error");
+      presetsStatus.textContent = err.message;
+    }
+  });
+
+  applyPresetBtn.addEventListener("click", () => {
+    const idx = presetSelect.value;
+    if (idx === "" || !state.config) return;
+    const preset = state.presets[Number(idx)];
+    if (!preset) return;
+
+    if (preset.site_name) {
+      state.config.site.replace_with = preset.site_name;
+    }
+    const dsMap = {};
+    (preset.datasources || []).forEach((ds) => {
+      if (ds.type) dsMap[ds.type] = ds.uid;
+    });
+    state.config.datasources.forEach((entry) => {
+      if (dsMap.hasOwnProperty(entry.type)) {
+        entry.uid.replace_with = dsMap[entry.type];
+      }
+    });
+
+    renderSite();
+    renderDatasources();
+  });
+
+  loadPresets();
 })();

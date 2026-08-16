@@ -31,8 +31,27 @@
     </div>
   </section>
 
+  <section id="presets-section" class="card">
+    <h2>2. Presets</h2>
+    <p class="section-note">Save reusable site name + datasource UID values (e.g. one per country) so you can quick-fill them below instead of looking them up each time.</p>
+    <div id="preset-list"></div>
+    <div class="row-actions">
+      <button type="button" id="add-preset-btn" class="secondary-btn">+ Add preset</button>
+      <button type="button" id="save-presets-btn" class="primary-btn">Save presets</button>
+    </div>
+    <p id="presets-status" class="status hidden"></p>
+  </section>
+
   <section id="editor-section" class="card hidden">
-    <h2>2. Review &amp; edit mappings</h2>
+    <h2>3. Review &amp; edit mappings</h2>
+
+    <div class="row-actions preset-quickfill">
+      <label for="preset-select">Quick-fill from preset:</label>
+      <select id="preset-select">
+        <option value="">-- Select a preset --</option>
+      </select>
+      <button type="button" id="apply-preset-btn" class="secondary-btn">Apply</button>
+    </div>
 
     <div class="subsection">
       <h3>Site name</h3>
@@ -117,7 +136,7 @@
   </section>
 
   <section id="apply-section" class="card hidden">
-    <h2>3. Apply</h2>
+    <h2>4. Apply</h2>
     <div class="row-actions">
       <button type="button" id="download-config-btn" class="secondary-btn">Download config.json</button>
       <button type="button" id="apply-btn" class="primary-btn">Apply &amp; download dashboard(s)</button>

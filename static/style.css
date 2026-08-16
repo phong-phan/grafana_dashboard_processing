@@ -1,17 +1,17 @@
 :root {
-  --bg: #21252b;
-  --card-bg: #282c34;
-  --input-bg: #2c313c;
-  --border: #3e4451;
-  --border-soft: #323842;
+  --bg: #16181d;
+  --card-bg: #1c1f26;
+  --input-bg: #22252c;
+  --border: #2e323b;
+  --border-soft: #262932;
   --text: #abb2bf;
-  --text-muted: #768093;
+  --text-muted: #767c8c;
   --accent: #61afef;
   --accent-hover: #7dbdf3;
-  --accent-soft: #2c3a4a;
+  --accent-soft: #202634;
   --danger: #e06c75;
   --ok: #98c379;
-  --warn-bg: #3a3220;
+  --warn-bg: #2a2416;
   --warn-border: #967a3a;
   --warn-text: #e5c07b;
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
@@ -68,6 +68,65 @@ main {
 
 .subsection { margin-bottom: 26px; }
 .subsection:last-child { margin-bottom: 0; }
+
+.section-note {
+  margin: -6px 0 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.preset-quickfill {
+  margin-top: 0;
+  margin-bottom: 22px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.preset-quickfill label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.preset-quickfill select {
+  width: auto;
+  min-width: 200px;
+}
+
+.preset-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  background: var(--input-bg);
+}
+
+.preset-card-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.preset-name-input {
+  font-weight: 600;
+  font-size: 14px;
+  max-width: 260px;
+}
+
+.preset-field-row {
+  display: grid;
+  grid-template-columns: 300px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.preset-field-row label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.preset-datasources { margin-bottom: 10px; }
 
 .subsection h3 {
   margin: 0 0 10px;

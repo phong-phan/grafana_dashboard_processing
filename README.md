@@ -32,6 +32,12 @@ This opens `http://127.0.0.1:8765` in your browser (stdlib only, no `pip install
 
 Options: `--port <n>` to change the port, `--host 0.0.0.0` to expose it to your LAN instead of just localhost, `--no-browser` to skip auto-opening a tab.
 
+### Presets
+
+If you regularly deploy to the same set of sites (e.g. one preset per country/region), the "Presets" section lets you save a site name plus a list of datasource-type-to-UID pairs under a name (e.g. `VN`, `US`, `KL`), so you don't have to look those values up on your Grafana instance every time. Add/edit/remove presets and click "Save presets" to persist them; then, once a dashboard is loaded, use "Quick-fill from preset" at the top of the review section to fill in the site name and any matching datasource UIDs in one click — anything the preset doesn't cover (or fields for datasource types not present in the loaded dashboard) is left untouched, and hosts/URLs/etc. still need your usual manual review.
+
+Presets are stored server-side in `presets.json` next to `app.py`, which — like `config.json` and every dashboard JSON — is excluded from git via `.gitignore`, since it holds real datasource UIDs.
+
 ## Usage
 
 The script operates in two modes: `generate-config` and `apply`.

@@ -24,6 +24,22 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from grafana_customizer import build_transform_maps, scan_dashboard, transform_dashboard
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+PRESETS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "presets.json")
+
+
+def load_presets():
+    if not os.path.isfile(PRESETS_FILE):
+        return []
+    try:
+        with open(PRESETS_FILE, "r") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return []
+
+
+def save_presets(presets):
+    with open(PRESETS_FILE, "w") as f:
+        json.dump(presets, f, indent=2)
 
 
 def aggregate_scan(files):
@@ -124,6 +140,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
+        if path == "/api/presets":
+            self._send_json(200, load_presets())
+            return
+
         if path == "/":
             path = "/index.html"
 
@@ -150,8 +170,21 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_scan()
         elif self.path == "/api/apply":
             self._handle_apply()
+        elif self.path == "/api/presets":
+            self._handle_save_presets()
         else:
             self._send_json(404, {"error": "Not found"})
+
+    def _handle_save_presets(self):
+        try:
+            presets = self._read_json_body()
+            if not isinstance(presets, list):
+                self._send_json(400, {"error": "Expected a list of presets."})
+                return
+            save_presets(presets)
+            self._send_json(200, {"ok": True})
+        except Exception as e:
+            self._send_json(400, {"error": str(e)})
 
     def _handle_scan(self):
         try:

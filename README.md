@@ -14,7 +14,7 @@ It handles the replacement of hostnames, updating of datasource UIDs from multip
 - **Site Name Updates**: Update the CheckMK site name in query specifications.
 - **Panel Transformation Updates**: Update the Match/Replace regex used by "Rename fields by regex" panel transformations (commonly used to strip a customer-specific host-name prefix from legends) globally.
 - **Value Mapping Updates**: Update the Value/Display text pairs used by panel value mappings (e.g. relabeling an IP address with a customer-specific hostname, or restyling a status label) wherever they occur.
-- **Data Pull URL Updates**: Update the URL used by `yesoreyeram-infinity-datasource` CSV/HTTP targets (e.g. a customer-specific CSV export endpoint) globally.
+- **Data Pull URL Updates**: Update the URL used by `yesoreyeram-infinity-datasource` CSV/HTTP targets (e.g. a customer-specific CSV export endpoint), and by canvas panel button API actions (`config.api.endpoint` / `fetch.url`, e.g. a "trigger update" button posting to an Ansible endpoint), globally.
 - **Panel Title Review**: Surface every hand-typed panel title for review, since these aren't otherwise touched by any of the automated replacements above.
 - **Text Panel Content Updates**: Update the hand-typed HTML/markdown body of "Text" panels (e.g. a dashboard header that hardcodes a customer/site name) wherever it occurs.
 - **Batch Processing**: Process entire directories of dashboards in one go.
@@ -34,7 +34,20 @@ Options: `--port <n>` to change the port, `--host 0.0.0.0` to expose it to your 
 
 ### Presets
 
-If you regularly deploy to the same set of sites (e.g. one preset per country/region), the "Presets" section lets you save a site name plus a list of datasource-type-to-UID pairs under a name (e.g. `VN`, `US`, `KL`), so you don't have to look those values up on your Grafana instance every time. Add/edit/remove presets and click "Save presets" to persist them; then, once a dashboard is loaded, use "Quick-fill from preset" at the top of the review section to fill in the site name and any matching datasource UIDs in one click — anything the preset doesn't cover (or fields for datasource types not present in the loaded dashboard) is left untouched, and hosts/URLs/etc. still need your usual manual review.
+If you regularly deploy to the same set of sites (e.g. one preset per country/region), the "Presets" section lets you save a site name, a list of datasource-type-to-UID pairs, and a list of data pull URL server mappings under a name (e.g. `VN`, `US`, `KL`), so you don't have to look those values up on your Grafana instance every time. Add/edit/remove presets and click "Save presets" to persist them; then, once a dashboard is loaded, use "Quick-fill from preset" at the top of the review section to fill in:
+
+- the site name,
+- any datasource UID whose type matches an entry in the preset,
+- and, for every data pull URL server row in the preset, the **origin** (scheme + host) of every detected data pull URL whose hostname contains that row's keyword — only the host part is swapped, the path/filename (e.g. `/export/iLO_state.csv`) is preserved exactly as detected.
+
+Since dashboards can pull CSVs (and call action-button API endpoints) from several different servers at once — e.g. a REPO server, an Ansible server, a CheckMK server — a preset isn't limited to one URL mapping. Add one row per source server with:
+
+- a **keyword** that's expected to appear in that server's hostname (e.g. `ans` for `ans.abc.corp.vn`, `repo` for `repo.abc.corp.vn`, `cmk` for `cmk.abc.corp.vn`) — matched case-insensitively as a substring, so you don't need to know or type the exact current URL, and
+- the **new base URL** to swap in for every detected URL matching that keyword (e.g. `https://ans.newsite.com`).
+
+Every detected data pull URL is checked against each row's keyword; the first row whose keyword is found in the URL's hostname wins. URLs matching no keyword are left as detected for manual review in the "Data pull URLs" table — this also covers multiple dashboards sharing the same base URL (e.g. several dashboards all pulling from `ans.abc.corp.vn`): one preset apply retargets all of them in one go instead of editing each dashboard by hand.
+
+Anything the preset doesn't cover (or datasource types not present in the loaded dashboard) is left untouched, and hosts/transformations/value mappings/panel titles/text content still need your usual manual review.
 
 Presets are stored server-side in `presets.json` next to `app.py`, which — like `config.json` and every dashboard JSON — is excluded from git via `.gitignore`, since it holds real datasource UIDs.
 

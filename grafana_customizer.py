@@ -54,6 +54,13 @@ def scan_dashboard(dashboard_data):
                 if ds_type == "yesoreyeram-infinity-datasource" and isinstance(node.get("url"), str):
                     urls.add(node["url"])
 
+            # Check for canvas panel button API endpoints (e.g. a "trigger
+            # update" button posting to a customer-specific Ansible/API URL).
+            if isinstance(node.get("endpoint"), str) and node["endpoint"].strip():
+                urls.add(node["endpoint"])
+            if isinstance(node.get("fetch"), dict) and isinstance(node["fetch"].get("url"), str):
+                urls.add(node["fetch"]["url"])
+
             # Check for requestSpec (where host_name and site usually live)
             if "requestSpec" in node and isinstance(node["requestSpec"], dict):
                 spec = node["requestSpec"]
@@ -377,6 +384,12 @@ def transform_dashboard(dashboard_data, maps):
                 # Update the data-pull URL for infinity-datasource targets
                 if ds_type == "yesoreyeram-infinity-datasource" and node.get("url") in url_map:
                     node["url"] = url_map[node["url"]]
+
+            # Update canvas panel button API endpoints
+            if node.get("endpoint") in url_map:
+                node["endpoint"] = url_map[node["endpoint"]]
+            if isinstance(node.get("fetch"), dict) and node["fetch"].get("url") in url_map:
+                node["fetch"]["url"] = url_map[node["fetch"]["url"]]
 
             # Update hand-typed panel title
             if "type" in node and node.get("title") in panel_title_map:

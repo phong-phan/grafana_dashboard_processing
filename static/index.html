@@ -32,14 +32,19 @@
   </section>
 
   <section id="presets-section" class="card">
-    <h2>2. Presets</h2>
-    <p class="section-note">Save reusable site name + datasource UID values (e.g. one per country) so you can quick-fill them below instead of looking them up each time.</p>
-    <div id="preset-list"></div>
-    <div class="row-actions">
-      <button type="button" id="add-preset-btn" class="secondary-btn">+ Add preset</button>
-      <button type="button" id="save-presets-btn" class="primary-btn">Save presets</button>
+    <div class="section-header-row">
+      <h2>2. Presets</h2>
+      <button type="button" id="toggle-presets-btn" class="collapse-toggle-btn" aria-expanded="false">Expand ▸</button>
     </div>
-    <p id="presets-status" class="status hidden"></p>
+    <div id="presets-body" class="hidden">
+      <p class="section-note">Save reusable site name, datasource UID values, and data pull URL server mappings (e.g. one per country) so you can quick-fill them below instead of looking them up each time.</p>
+      <div id="preset-list"></div>
+      <div class="row-actions">
+        <button type="button" id="add-preset-btn" class="secondary-btn">+ Add preset</button>
+        <button type="button" id="save-presets-btn" class="primary-btn">Save presets</button>
+      </div>
+      <p id="presets-status" class="status hidden"></p>
+    </div>
   </section>
 
   <section id="editor-section" class="card hidden">

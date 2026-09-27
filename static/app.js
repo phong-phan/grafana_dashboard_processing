@@ -40,12 +40,22 @@
   const applyBtn = el("apply-btn");
   const applyStatus = el("apply-status");
 
+  const presetsBody = el("presets-body");
+  const togglePresetsBtn = el("toggle-presets-btn");
   const presetList = el("preset-list");
   const addPresetBtn = el("add-preset-btn");
   const savePresetsBtn = el("save-presets-btn");
   const presetsStatus = el("presets-status");
   const presetSelect = el("preset-select");
   const applyPresetBtn = el("apply-preset-btn");
+
+  const expandedPresets = new Set(); // indices of preset cards currently expanded
+
+  togglePresetsBtn.addEventListener("click", () => {
+    const collapsed = presetsBody.classList.toggle("hidden");
+    togglePresetsBtn.textContent = collapsed ? "Expand ▸" : "Minimize ▾";
+    togglePresetsBtn.setAttribute("aria-expanded", String(!collapsed));
+  });
 
   // ---------- File loading ----------
 
@@ -785,11 +795,52 @@
   }
 
   function buildPresetCard(preset, presetIdx) {
+    // Migrate legacy single repo_url (one blanket origin for every URL) into
+    // the repo_urls list, so old presets.json entries still load.
+    if (!preset.repo_urls && preset.repo_url) {
+      preset.repo_urls = [{ name: "", replace_with: preset.repo_url }];
+      delete preset.repo_url;
+    }
+    // Migrate the old {name, current, replace_with} shape (matched by exact
+    // origin) to the new {name, replace_with} shape (matched by keyword
+    // found in the detected URL's hostname) - try to recover a name from
+    // the old "current" origin's first hostname label when none was set.
+    if (preset.repo_urls) {
+      preset.repo_urls = preset.repo_urls.map((ru) => {
+        if (!ru.hasOwnProperty("current")) return ru;
+        let name = ru.name || "";
+        if (!name && ru.current) {
+          try {
+            name = new URL(ru.current).hostname.split(".")[0];
+          } catch (err) {
+            // Not a parseable URL - leave the name blank for manual entry.
+          }
+        }
+        return { name, replace_with: ru.replace_with || "" };
+      });
+    }
+
     const card = document.createElement("div");
     card.className = "preset-card";
 
+    const isExpanded = expandedPresets.has(presetIdx);
+
     const header = document.createElement("div");
     header.className = "preset-card-header";
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.className = "card-toggle-btn";
+    toggleBtn.textContent = isExpanded ? "▾" : "▸";
+    toggleBtn.setAttribute("aria-expanded", String(isExpanded));
+    toggleBtn.addEventListener("click", () => {
+      if (expandedPresets.has(presetIdx)) {
+        expandedPresets.delete(presetIdx);
+      } else {
+        expandedPresets.add(presetIdx);
+      }
+      renderPresets();
+    });
 
     const nameInput = document.createElement("input");
     nameInput.type = "text";
@@ -801,6 +852,18 @@
       renderPresetSelect();
     });
 
+    const summary = document.createElement("span");
+    summary.className = "preset-summary";
+    if (!isExpanded) {
+      const dsCount = (preset.datasources || []).length;
+      const urlCount = (preset.repo_urls || []).length;
+      const parts = [];
+      if (preset.site_name) parts.push(preset.site_name);
+      parts.push(`${dsCount} datasource${dsCount === 1 ? "" : "s"}`);
+      parts.push(`${urlCount} URL server${urlCount === 1 ? "" : "s"}`);
+      summary.textContent = parts.join(" · ");
+    }
+
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.className = "remove-row-btn";
@@ -810,9 +873,18 @@
       renderPresets();
     });
 
+    header.appendChild(toggleBtn);
     header.appendChild(nameInput);
+    header.appendChild(summary);
     header.appendChild(deleteBtn);
     card.appendChild(header);
+
+    if (!isExpanded) {
+      return card;
+    }
+
+    const cardBody = document.createElement("div");
+    cardBody.className = "preset-card-body";
 
     const siteRow = document.createElement("div");
     siteRow.className = "preset-field-row";
@@ -826,14 +898,37 @@
     });
     siteRow.appendChild(siteLabel);
     siteRow.appendChild(siteInput);
-    card.appendChild(siteRow);
+    cardBody.appendChild(siteRow);
+
+    const urlServersWrap = document.createElement("div");
+    urlServersWrap.className = "preset-datasources";
+    const urlServersLabel = document.createElement("p");
+    urlServersLabel.className = "section-note";
+    urlServersLabel.textContent =
+      "Data pull URL servers - a detected URL is matched by keyword found in its hostname (e.g. \"ans\" matches ans.dtq.bgt.vn) and swapped onto the base URL below.";
+    urlServersWrap.appendChild(urlServersLabel);
+    (preset.repo_urls || []).forEach((ru, ruIdx) => {
+      urlServersWrap.appendChild(buildPresetUrlRow(presetIdx, ru, ruIdx));
+    });
+    cardBody.appendChild(urlServersWrap);
+
+    const addUrlServerBtn = document.createElement("button");
+    addUrlServerBtn.type = "button";
+    addUrlServerBtn.className = "secondary-btn";
+    addUrlServerBtn.textContent = "+ Add URL server";
+    addUrlServerBtn.addEventListener("click", () => {
+      if (!state.presets[presetIdx].repo_urls) state.presets[presetIdx].repo_urls = [];
+      state.presets[presetIdx].repo_urls.push({ name: "", replace_with: "" });
+      renderPresets();
+    });
+    cardBody.appendChild(addUrlServerBtn);
 
     const dsWrap = document.createElement("div");
     dsWrap.className = "preset-datasources";
     (preset.datasources || []).forEach((ds, dsIdx) => {
       dsWrap.appendChild(buildPresetDatasourceRow(presetIdx, ds, dsIdx));
     });
-    card.appendChild(dsWrap);
+    cardBody.appendChild(dsWrap);
 
     const addDsBtn = document.createElement("button");
     addDsBtn.type = "button";
@@ -844,7 +939,9 @@
       state.presets[presetIdx].datasources.push({ type: "", uid: "" });
       renderPresets();
     });
-    card.appendChild(addDsBtn);
+    cardBody.appendChild(addDsBtn);
+
+    card.appendChild(cardBody);
 
     return card;
   }
@@ -884,6 +981,41 @@
     return row;
   }
 
+  function buildPresetUrlRow(presetIdx, ru, ruIdx) {
+    const row = document.createElement("div");
+    row.className = "preset-field-row preset-url-row";
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.placeholder = "Keyword (e.g. ans, repo, cmk)";
+    nameInput.value = ru.name || "";
+    nameInput.addEventListener("input", () => {
+      state.presets[presetIdx].repo_urls[ruIdx].name = nameInput.value;
+    });
+
+    const replaceInput = document.createElement("input");
+    replaceInput.type = "text";
+    replaceInput.placeholder = "New base URL, e.g. https://ans.newsite.com";
+    replaceInput.value = ru.replace_with || "";
+    replaceInput.addEventListener("input", () => {
+      state.presets[presetIdx].repo_urls[ruIdx].replace_with = replaceInput.value;
+    });
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "remove-row-btn";
+    removeBtn.textContent = "Remove";
+    removeBtn.addEventListener("click", () => {
+      state.presets[presetIdx].repo_urls.splice(ruIdx, 1);
+      renderPresets();
+    });
+
+    row.appendChild(nameInput);
+    row.appendChild(replaceInput);
+    row.appendChild(removeBtn);
+    return row;
+  }
+
   function renderPresetSelect() {
     const prevValue = presetSelect.value;
     presetSelect.innerHTML = '<option value="">-- Select a preset --</option>';
@@ -902,6 +1034,7 @@
     state.presets.push({
       name: "",
       site_name: "",
+      repo_urls: [],
       datasources: [
         { type: "checkmk-cloud-datasource", uid: "" },
         { type: "yesoreyeram-infinity-datasource", uid: "" },
@@ -952,8 +1085,36 @@
       }
     });
 
+    // Each named URL server is matched by keyword against the hostname of
+    // every detected data-pull URL (e.g. "ans" matches ans.dtq.bgt.vn), so
+    // dashboards pulling CSVs from several different servers (REPO, ANSIBLE,
+    // CheckMK, ...) each get matched to the right replacement in one go -
+    // URLs matching no keyword are left untouched for manual review.
+    (preset.repo_urls || []).forEach((ru) => {
+      if (!ru.name || !ru.replace_with) return;
+      const keyword = ru.name.trim().toLowerCase();
+      if (!keyword) return;
+      let newOrigin;
+      try {
+        newOrigin = new URL(ru.replace_with).origin;
+      } catch (err) {
+        newOrigin = ru.replace_with.replace(/\/+$/, "");
+      }
+      (state.config.urls || []).forEach((entry) => {
+        try {
+          const parsed = new URL(entry.current);
+          if (parsed.hostname.toLowerCase().includes(keyword)) {
+            entry.replace_with = newOrigin + parsed.pathname + parsed.search + parsed.hash;
+          }
+        } catch (err) {
+          // Not a parseable absolute URL - leave it untouched.
+        }
+      });
+    });
+
     renderSite();
     renderDatasources();
+    renderUrls();
   });
 
   loadPresets();
